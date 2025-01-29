@@ -8,6 +8,7 @@
 - [Model Development](#model-development)
 - [API Development](#api-development)
 - [Testing](#testing)
+- [Example API Usage](#example-api-usage)
 - [Next Steps for Scalability](#next-steps-for-scalability)
 
 ---
@@ -32,7 +33,7 @@ There are two main datasets in this project:
 
 1. **Clone the Repository & Install Requirements**
    ```bash
-   git clone https://github.com/zakaria-hamane/nuitee-technical-assessemnt.git
+   git clone <repo-url>
    cd nuitee
    python -m venv venv
    source venv/bin/activate  # For Linux/Mac
@@ -359,6 +360,117 @@ By replacing ad-hoc regex solutions with a more robust pipeline and (optionally)
 1. **Unit Tests**: Tests for cleaners, feature extraction, etc.
 2. **Integration Tests**: End-to-end tests calling the FastAPI endpoints.
 3. **Benchmarking**: Synthetic dataset is used to measure precision, recall, F1.
+
+## Example API Usage
+
+### 1. `/process_rooms`
+
+**Request**:
+```bash
+curl -X 'POST' \
+  'http://localhost:8000/process_rooms' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "reference_rooms": [
+    {
+      "room_name": "Deluxe King Room with City View"
+    }
+  ],
+  "supplier_rooms": [
+    {
+      "room_name": "King Deluxe City View Room"
+    }
+  ]
+}'
+```
+
+**Response**:
+```json
+{
+  "status": "success",
+  "results": [
+    {
+      "original_name": "Deluxe King Room with City View",
+      "cleaned_name": "dlx king room with city view",
+      "features": {
+        "bedType": "king",
+        "roomClass": "deluxe",
+        "viewType": "city",
+        "boardType": "unknown",
+        "accessibility": "unknown",
+        "occupancy": "unknown"
+      }
+    }
+  ]
+}
+```
+
+---
+
+### 2. `/match_rooms`
+
+**Request**:
+```bash
+curl -X 'POST' \
+  'http://localhost:8000/match_rooms' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "reference_rooms": [
+    {
+      "room_id": "ref1",
+      "room_name": "Deluxe King Room with City View"
+    }
+  ],
+  "supplier_rooms": [
+    {
+      "room_id": "sup1",
+      "room_name": "King Deluxe City View Room"
+    }
+  ]
+}'
+```
+
+**Response**:
+```json
+{
+  "status": "success",
+  "matches": [
+    {
+      "reference_room": {
+        "original_name": "Deluxe King Room with City View",
+        "cleaned_name": "dlx king room with city view",
+        "features": {
+          "bedType": "king",
+          "roomClass": "deluxe",
+          "viewType": "city",
+          "boardType": "unknown",
+          "accessibility": "unknown",
+          "occupancy": "unknown"
+        },
+        "id": "ref1"
+      },
+      "supplier_room": {
+        "original_name": "King Deluxe City View Room",
+        "cleaned_name": "king dlx city view room",
+        "features": {
+          "bedType": "king",
+          "roomClass": "deluxe",
+          "viewType": "city",
+          "boardType": "unknown",
+          "accessibility": "unknown",
+          "occupancy": "unknown"
+        },
+        "id": "sup1"
+      },
+      "similarity_score": 0.935
+    }
+  ],
+  "unmatched_reference": [],
+  "unmatched_supplier": []
+}
+```
 
 ## Next Steps for Scalability
 1. **Blocking & Candidate Selection**
