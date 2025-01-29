@@ -32,7 +32,7 @@ There are two main datasets in this project:
 
 1. **Clone the Repository & Install Requirements**
    ```bash
-   git clone [<repo-url>](https://github.com/zakaria-hamane/nuitee-technical-assessemnt.git)
+   git clone https://github.com/zakaria-hamane/nuitee-technical-assessemnt.git
    cd nuitee
    python -m venv venv
    source venv/bin/activate  # For Linux/Mac
