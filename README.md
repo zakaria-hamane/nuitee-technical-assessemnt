@@ -29,6 +29,7 @@ There are two main datasets in this project:
    - Serves as the "input catalog" for matching
 
 ## How to Run
+
 1. **Clone the Repository & Install Requirements**
    ```bash
    git clone <repo-url>
@@ -40,13 +41,23 @@ There are two main datasets in this project:
 
    pip install -r requirements.txt
    ```
+
 2. **Set up Environment Variables**
    - Copy `.env.example` to `.env` or create a new `.env` file.
    - Add your OpenAI API key:
      ```
      OPENAI_API_KEY=<YOUR-OPENAI-KEY>
      ```
-3. **Run Batch Processing** (data cleanup, optional benchmark creation, etc.)
+
+3. **Data Setup**
+   ```bash
+   # Create needed directories
+   mkdir -p data/raw data/processed logs
+   ```
+   - Download the reference room file [here](https://docs.google.com/spreadsheets/d/1p-sqMUdtqFQJGc6v9tzqETIuxu8Gpf7r/edit?usp=drive_link&ouid=100361813368908650921&rtpof=true&sd=true) and place it in `data/raw` as `reference_rooms.xlsx`
+   - Download the supplier room file [here](https://drive.google.com/file/d/1Nrh9_8xyidzMkbLH52RIZZZ2mU-30rAe/view?usp=drive_link) and place it in `data/raw` as `supplier_rooms.csv`
+
+4. **Run Batch Processing** (data cleanup, optional benchmark creation, etc.)
    ```bash
    python batch_process.py \
        --reference_file="data/raw/reference_rooms.xlsx" \
@@ -56,18 +67,126 @@ There are two main datasets in this project:
        --benchmark_size=100 \
        --noise_level=0.2
    ```
-4. **Run the API**
+5. **Run the API**
    ```bash
    uvicorn main:app --host 0.0.0.0 --port 8000 --reload
    ```
-5. **Test the Endpoints**
+
+6. **Test the Endpoints**
    - Go to `http://localhost:8000/docs` to see the automatically generated Swagger UI.
    - Run the health check endpoint:
      ```bash
      curl http://localhost:8000/health
      ```
 
+### Using Docker
+
+1. **Make scripts executable** (if needed):
+   ```bash
+   chmod +x scripts/run_tests.sh scripts/cleanup.sh
+   ```
+
+2. **Build and start services**:
+   ```bash
+   # Build the images
+   docker-compose build
+
+   # Start the services
+   docker-compose up
+   ```
+3. **Run just the batch process**:
+   ```bash
+   docker-compose run --rm app python batch_process.py
+   ```
+4. **Run the API service**:
+   ```bash
+   docker-compose up room-matching
+   ```
+5. **Run tests**:
+   ```bash
+   ./scripts/run_tests.sh
+   ```
+6. **View logs**:
+   ```bash
+   # View all logs
+   docker-compose logs
+
+   # View specific service logs
+   docker-compose logs app
+   docker-compose logs api
+
+   # Follow logs
+   docker-compose logs -f
+   ```
+7. **Clean up**:
+   ```bash
+   # Stop services
+   docker-compose down
+
+   # Clean up resources
+   ./scripts/cleanup.sh
+   ```
+
+### Project Structure (Example)
+
+```
+nuitee/
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+├── .env
+├── .dockerignore
+├── scripts/
+│   ├── run_tests.sh
+│   └── cleanup.sh
+├── data/
+│   ├── raw/
+│   │   ├── reference_rooms.xlsx
+│   │   └── supplier_rooms.csv
+│   └── processed/
+├── logs/
+├── src/
+│   └── ...
+├── tests/
+│   └── ...
+├── batch_process.py
+└── main.py
+```
+
+**To develop with Docker**:
+
+- Start development environment:
+  ```bash
+  # Start services in development mode
+  docker-compose up -d
+
+  # View logs while developing
+  docker-compose logs -f
+  ```
+- Make changes and test:
+  ```bash
+  # Run tests
+  ./scripts/run_tests.sh
+
+  # Run specific test file
+  ./scripts/run_tests.sh tests/unit/test_feature_extractor.py
+  ```
+- Rebuild after changes:
+  ```bash
+  # Rebuild services
+  docker-compose build
+
+  # Restart services
+  docker-compose restart
+  ```
+- Access the API:
+  ```bash
+  # API will be available at:
+  http://localhost:8000/docs
+  ```
+
 ## Data Preprocessing & Feature Extraction for Room Matching
+
 Below is a practical, step-by-step guide for **data preprocessing** and **feature extraction** on your `room_name` and `supplier_room_name` fields before they are passed into the matching pipeline. These steps help standardize text data, ensure consistency, and allow the model (and optional LLM-based NER) to yield better accuracy.
 
 ---
@@ -75,27 +194,27 @@ Below is a practical, step-by-step guide for **data preprocessing** and **featur
 ### 1. Data Cleaning
 
 1. **Lowercasing**
-    - Convert all text to lowercase to ensure case-insensitive comparisons.
-    - Example: "Classic Room ADA – ROOM ONLY" → "classic room ada – room only"
+   - Convert all text to lowercase to ensure case-insensitive comparisons.
+   - Example: "Classic Room ADA – ROOM ONLY" → "classic room ada – room only"
 2. **Remove Extra Whitespace & Non-ASCII Characters**
-    - Trim leading/trailing spaces.
-    - Replace multiple spaces with a single space.
-    - Remove or normalize any unusual characters (e.g., "\t", "\n", or exotic Unicode punctuation).
-    - Example: " superior room " → "superior room"
+   - Trim leading/trailing spaces.
+   - Replace multiple spaces with a single space.
+   - Remove or normalize any unusual characters (e.g., "\t", "\n", or exotic Unicode punctuation).
+   - Example: " superior room " → "superior room"
 3. **Remove or Replace Punctuation / Symbols**
-    - Common punctuation like commas, semicolons, periods, hyphens, slashes, parentheses can often be normalized.
-    - Decide whether to remove them or turn them into spaces. (In many cases, replacing them with spaces or a delimiter helps tokenization.)
-    - Example: "Deluxe/Double - 2 Pax!" → "deluxe double 2 pax"
+   - Common punctuation like commas, semicolons, periods, hyphens, slashes, parentheses can often be normalized.
+   - Decide whether to remove them or turn them into spaces. (In many cases, replacing them with spaces or a delimiter helps tokenization.)
+   - Example: "Deluxe/Double - 2 Pax!" → "deluxe double 2 pax"
 4. **Normalize Common Abbreviations and Typos**
-    - Standardize known short forms:
-        - "rm" → "room"
-        - "ro" → "room only" or "room-only"
-        - "nr" → "non-refundable"
-        - "ada" → "accessible"
-    - Example: "CLASSIC ROOM ADA - RO" → "classic room accessible room-only"
+   - Standardize known short forms:
+     - "rm" → "room"
+     - "ro" → "room only" or "room-only"
+     - "nr" → "non-refundable"
+     - "ada" → "accessible"
+   - Example: "CLASSIC ROOM ADA - RO" → "classic room accessible room-only"
 5. **Strip Stopwords That Add No Meaning** (Optional)
-    - Words like "and", "with", "the", "of", "a", etc. can be removed if they don’t carry domain-specific meaning.
-    - However, be mindful that words like "non-smoking" might be considered an important attribute.
+   - Words like "and", "with", "the", "of", "a", etc. can be removed if they don’t carry domain-specific meaning.
+   - However, be mindful that words like "non-smoking" might be considered an important attribute.
 
 ---
 
@@ -104,67 +223,67 @@ Below is a practical, step-by-step guide for **data preprocessing** and **featur
 For **hotel rooms**, certain repeated concepts are valuable to parse or normalize. These often map well to the entities we want to extract:
 
 1. **Bed Types**
-    - Examples: "king bed", "queen bed", "twin bed", "double bed", etc.
-    - Normalize synonyms or slightly different expressions.
-    - E.g., detect strings like "1 king", "king-size", or "king-sized" and convert them to something consistent like "king-bed".
+   - Examples: "king bed", "queen bed", "twin bed", "double bed", etc.
+   - Normalize synonyms or slightly different expressions.
+   - E.g., detect strings like "1 king", "king-size", or "king-sized" and convert them to something consistent like "king-bed".
 2. **View Types**
-    - Examples: "city view", "sea view", "courtyard view".
-    - Convert to "city-view", "sea-view", etc. if you want consistent tokens.
+   - Examples: "city view", "sea view", "courtyard view".
+   - Convert to "city-view", "sea-view", etc. if you want consistent tokens.
 3. **Room Class / Category**
-    - Terms like "standard", "superior", "deluxe", "premium", "junior suite", "suite".
-    - Create a mapping if you prefer shorter or uniform tokens (e.g., "junior suite" → "jr-suite").
+   - Terms like "standard", "superior", "deluxe", "premium", "junior suite", "suite".
+   - Create a mapping if you prefer shorter or uniform tokens (e.g., "junior suite" → "jr-suite").
 4. **Occupancy / Number of People**
-    - "double", "triple", "quadruple", or mentions like "2 pax" or "3 adults".
-    - Convert to a single token if needed ("2pax", "3pax", etc.).
+   - "double", "triple", "quadruple", or mentions like "2 pax" or "3 adults".
+   - Convert to a single token if needed ("2pax", "3pax", etc.).
 5. **Smoking / Non-Smoking**
-    - Terms like "non-smoking", "smoking", "smoke-free".
-    - Convert them to "non-smoking" vs. "smoking".
+   - Terms like "non-smoking", "smoking", "smoke-free".
+   - Convert them to "non-smoking" vs. "smoking".
 6. **Board / Meal Plans**
-    - "room only", "breakfast included", "half board", "full board", "all inclusive".
-    - Standardize them: "room-only", "breakfast-included", "half-board", etc.
+   - "room only", "breakfast included", "half board", "full board", "all inclusive".
+   - Standardize them: "room-only", "breakfast-included", "half-board", etc.
 7. **Refundability / Cancellation Policy**
-    - "non-refundable", "free cancellation", etc.
-    - Standardize if they appear as part of the naming convention.
+   - "non-refundable", "free cancellation", etc.
+   - Standardize if they appear as part of the naming convention.
 8. **Other Room Attributes**
-    - "ADA", "accessible", "balcony", "terrace", etc.
+   - "ADA", "accessible", "balcony", "terrace", etc.
 
 ---
 
 ### 3. Tokenization & Feature Extraction
 
 1. **Tokenize**
-    - Split the cleaned string by spaces (or other delimiters) into tokens.
-    - Example: "classic room accessible room-only" → ["classic", "room", "accessible", "room-only"]
+   - Split the cleaned string by spaces (or other delimiters) into tokens.
+   - Example: "classic room accessible room-only" → ["classic", "room", "accessible", "room-only"]
 2. **Domain Tagging / Parsing** (optional LLM-based NER)
-    - Instead of building a custom parser or using simple regex to identify bed type, room type, etc., you can leverage a **prompt-based approach** with an LLM.
-    - Example prompt to LLM:
-      ```
-      "Extract the following domain-specific attributes from this room description:
-      1) bedType
-      2) roomType
-      3) viewType
-      4) boardType
-      5) accessibility
-      6) occupancy
+   - Instead of building a custom parser or using simple regex to identify bed type, room type, etc., you can leverage a **prompt-based approach** with an LLM.
+   - Example prompt to LLM:
+     ```
+     "Extract the following domain-specific attributes from this room description:
+     1) bedType
+     2) roomType
+     3) viewType
+     4) boardType
+     5) accessibility
+     6) occupancy
 
-      The text is: 'classic room accessible room-only'
-      "
-      ```
-    - Parse the structured response (JSON or bullet points) to fill out fields:
-      ```json
-      {
-        "bedType": null,
-        "roomType": "classic",
-        "viewType": null,
-        "boardType": "room-only",
-        "accessibility": "accessible",
-        "occupancy": null,
-        "additionalAttributes": []
-      }
-      ```
+     The text is: 'classic room accessible room-only'
+     "
+     ```
+   - Parse the structured response (JSON or bullet points) to fill out fields:
+     ```json
+     {
+       "bedType": null,
+       "roomType": "classic",
+       "viewType": null,
+       "boardType": "room-only",
+       "accessibility": "accessible",
+       "occupancy": null,
+       "additionalAttributes": []
+     }
+     ```
 3. **Use Model or `run_ner`**
-    - If you have a built-in NER routine, it will parse text for bed type, room class, etc.
-    - Pre-normalizing or partially tagging data helps if original text is inconsistent.
+   - If you have a built-in NER routine, it will parse text for bed type, room class, etc.
+   - Pre-normalizing or partially tagging data helps if original text is inconsistent.
 
 ---
 
@@ -177,26 +296,26 @@ Suppose you have:
 A possible transformation pipeline:
 
 1. **Lowercase**:
-    - "classic room - olympic queen bed - room only"
-    - "classic room ada r.o."
+   - "classic room - olympic queen bed - room only"
+   - "classic room ada r.o."
 2. **Remove / Replace punctuation**:
-    - "classic room olympic queen bed room only"
-    - "classic room ada ro"
+   - "classic room olympic queen bed room only"
+   - "classic room ada ro"
 3. **Normalize abbreviations**:
-    - "ada" → "accessible"
-    - "ro" → "room-only"
-    - Results:
-      - "classic room olympic queen bed room-only"
-      - "classic room accessible room-only"
+   - "ada" → "accessible"
+   - "ro" → "room-only"
+   - Results:
+     - "classic room olympic queen bed room-only"
+     - "classic room accessible room-only"
 4. **Domain synonyms** (optional):
-    - "olympic queen bed" → "queen-bed"
-    - Final tokens:
-      - ["classic", "room", "queen-bed", "room-only"]
-      - ["classic", "room", "accessible", "room-only"]
+   - "olympic queen bed" → "queen-bed"
+   - Final tokens:
+     - ["classic", "room", "queen-bed", "room-only"]
+     - ["classic", "room", "accessible", "room-only"]
 5. **(Optional) LLM Prompt**:
-    - Ask the LLM to classify or label the text with bed type, room type, etc.
+   - Ask the LLM to classify or label the text with bed type, room type, etc.
 6. **Send Through Matching Pipeline**:
-    - Provide the cleaned (or tokenized) strings to the matching system.
+   - Provide the cleaned (or tokenized) strings to the matching system.
 
 ---
 
